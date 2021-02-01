@@ -9,101 +9,84 @@ import 'request_token.dart';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Authenticates a user with Azure Active Directory using OAuth2.0.
 class AadOAuth {
   static Config _config;
   AuthStorage _authStorage;
-  Token token;
   RequestCode _requestCode;
   RequestToken _requestToken;
 
+  /// Instantiating AadOAuth authentication.
+  /// [config] Parameters according to official Microsoft Documentation.
   AadOAuth(Config config) {
     _config = config;
-    _authStorage = new AuthStorage(tokenIdentifier: config.tokenIdentifier);
-    _requestCode = new RequestCode(_config);
-    _requestToken = new RequestToken(_config);
+    _authStorage = AuthStorage(tokenIdentifier: config.tokenIdentifier);
+    _requestCode = RequestCode(_config);
+    _requestToken = RequestToken(_config);
   }
 
+  /// Set [screenSize] of webview.
   void setWebViewScreenSize(Rect screenSize) {
-    _config.screenSize = screenSize;
+    if (screenSize != _config.screenSize) {
+      _config.screenSize = screenSize;
+      _requestCode.sizeChanged();
+    }
   }
 
+  /// Perform Azure AD login.
   Future<void> login() async {
     await _removeOldTokenOnFirstLogin();
-    if (!Token.tokenIsValid(token) )
-      await _performAuthorization();
+    await _authorization();
   }
 
-  Future<String> getAccessToken() async {
-    if (!Token.tokenIsValid(token) )
-      await _performAuthorization();
+  /// Retrieve cached OAuth Access Token.
+  Future<String> getAccessToken() async =>
+      (await _authStorage.loadTokenFromCache()).accessToken;
 
-    return token.accessToken;
-  }
+  /// Retrieve cached OAuth Id Token.
+  Future<String> getIdToken() async =>
+      (await _authStorage.loadTokenFromCache()).idToken;
 
-  Future<String> getIdToken() async {
-    if (!Token.tokenIsValid(token) )
-      await _performAuthorization();
-
-    return token.idToken;
-  }
-
-  bool tokenIsValid() {
-    return Token.tokenIsValid(token);
-  }
-
+  /// Perform Azure AD logout.
   Future<void> logout() async {
     await _authStorage.clear();
     await _requestCode.clearCookies();
-    token = null;
-    AadOAuth(_config);
   }
 
-  Future<void> _performAuthorization() async {
-    // load token from cache
-    token = await _authStorage.loadTokenToCache();
+  /// Authorize user via refresh token or web gui if necessary.
+  Future<Token> _authorization() async {
+    var token = await _authStorage.loadTokenFromCache();
 
-    //still have refreh token / try to get new access token with refresh token
-    if (token != null)
-      await _performRefreshAuthFlow();
-
-    // if we have no refresh token try to perform full request code oauth flow
-    else {
-      try {
-        await _performFullAuthFlow();
-      } catch (e) {
-        rethrow;
-      }
+    if (token.hasValidAccessToken()) {
+      return token;
     }
 
-    //save token to cache
+    if (token.hasRefreshToken()) {
+      token = await _requestToken.requestRefreshToken(token.refreshToken);
+    }
+
+    if (!token.hasValidAccessToken()) {
+      token = await _performFullAuthFlow();
+    }
+
     await _authStorage.saveTokenToCache(token);
+    return token;
   }
 
-  Future<void> _performFullAuthFlow() async {
-    String code;
-    try {
-      code = await _requestCode.requestCode();
-      token = await _requestToken.requestToken(code);
-    } catch (e) {
-      rethrow;
+  /// Authorize user via refresh token or web gui if necessary.
+  Future<Token> _performFullAuthFlow() async {
+    var code = await _requestCode.requestCode();
+    if (code == null) {
+      throw Exception('Access denied or authentication canceled.');
     }
-  }
-
-  Future<void> _performRefreshAuthFlow() async {
-    if (token.refreshToken != null) {
-      try {
-        token = await _requestToken.requestRefreshToken(token.refreshToken);
-      } catch (e) {
-        //do nothing (because later we try to do a full oauth code flow request)
-      }
-    }
+    return await _requestToken.requestToken(code);
   }
 
   Future<void> _removeOldTokenOnFirstLogin() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    final _keyFreshInstall = "freshInstall";
+    var prefs = await SharedPreferences.getInstance();
+    final _keyFreshInstall = 'freshInstall';
     if (!prefs.getKeys().contains(_keyFreshInstall)) {
-      logout();
+      await logout();
       await prefs.setBool(_keyFreshInstall, false);
     }
   }

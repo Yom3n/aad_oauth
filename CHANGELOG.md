@@ -1,3 +1,17 @@
+## [0.2.1] - 2020xxxx
+
+- Enable to resize webview after init #68
+- Add dartdoc to most important elements #75
+- Fix token init #89
+- Upgrade plugins #88
+
+## [0.2.0] - 20201007
+
+- Add additional config options #66
+- Throw Exception on return #55
+- Fix Example App #65
+- Comply Pub Dev Requirements #67
+
 ## [0.1.9] - 20200529
 
 - Added id_token support https://github.com/Earlybyte/aad_oauth/pull/36

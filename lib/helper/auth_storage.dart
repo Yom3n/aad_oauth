@@ -1,32 +1,33 @@
 import 'dart:async';
 import 'package:aad_oauth/model/token.dart';
-import "dart:convert" as Convert;
+import 'dart:convert' show jsonEncode, jsonDecode;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuthStorage {
-  static AuthStorage shared = new AuthStorage();
-  FlutterSecureStorage _secureStorage = FlutterSecureStorage();
+  static AuthStorage shared = AuthStorage();
+  final FlutterSecureStorage _secureStorage = FlutterSecureStorage();
   String _tokenIdentifier;
 
-  AuthStorage({String tokenIdentifier = "Token"}) {
+  AuthStorage({String tokenIdentifier = 'Token'}) {
     _tokenIdentifier = tokenIdentifier;
   }
 
   Future<void> saveTokenToCache(Token token) async {
     var data = Token.toJsonMap(token);
-    var json = Convert.jsonEncode(data);
+    var json = jsonEncode(data);
     await _secureStorage.write(key: _tokenIdentifier, value: json);
   }
 
-  Future<T> loadTokenToCache<T extends Token>() async {
+  Future<T> loadTokenFromCache<T extends Token>() async {
+    var emptyToken = Token();
     var json = await _secureStorage.read(key: _tokenIdentifier);
-    if (json == null) return null;
+    if (json == null) return emptyToken;
     try {
-      var data = Convert.jsonDecode(json);
+      var data = jsonDecode(json);
       return _getTokenFromMap<T>(data);
     } catch (exception) {
       print(exception);
-      return null;
+      return emptyToken;
     }
   }
 
@@ -34,6 +35,6 @@ class AuthStorage {
       Token.fromJson(data);
 
   Future clear() async {
-    _secureStorage.delete(key: _tokenIdentifier);
+    await _secureStorage.delete(key: _tokenIdentifier);
   }
 }
