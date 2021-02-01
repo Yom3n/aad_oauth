@@ -33,10 +33,10 @@ class AadOAuth {
     }
   }
 
-  /// Perform Azure AD login.
-  Future<void> login() async {
+  /// Perform Azure AD login. Return token
+  Future<Token> login() async {
     await _removeOldTokenOnFirstLogin();
-    await _authorization();
+    return await _authorization();
   }
 
   /// Retrieve cached OAuth Access Token.
